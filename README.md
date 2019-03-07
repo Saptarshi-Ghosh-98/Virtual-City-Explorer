@@ -1,2 +1,2 @@
 # Virtual-City-Explorer
-Roam in a Virtual City
+Free-Roam in a Virtual City rendered using OpenGL.

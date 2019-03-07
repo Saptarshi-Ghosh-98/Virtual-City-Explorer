@@ -33,3 +33,8 @@
 *.exe
 *.out
 *.app
+
+# Backups
+
+*.bak
+*.backup

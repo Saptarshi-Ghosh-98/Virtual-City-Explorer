@@ -45,4 +45,4 @@ target_link_libraries(
 )
 
 # COPY Assets to Build Directory
-file(COPY Model shader DESTINATION ${CMAKE_BINARY_DIR})
+file(COPY model shader DESTINATION ${CMAKE_BINARY_DIR})

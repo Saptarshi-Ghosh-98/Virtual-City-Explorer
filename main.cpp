@@ -1,7 +1,12 @@
 #include "global.h"
 
+#define GLM_ENABLE_EXPERIMENTAL
+#define GLM_GTC_constants
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform2.hpp>
+#include <glm/gtc/constants.hpp>
+
 #include <GLFW/glfw3.h>
 #include <vector>
 #include <thread>
@@ -80,7 +85,7 @@ void initializeGLFW() {
 
 	glfwWindowHint(GLFW_SAMPLES, 16);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	
 	monitor = glfwGetPrimaryMonitor();
@@ -115,11 +120,11 @@ int main() {
 	glEnable(GL_CULL_FACE);
 
 	// Objects
-	Object tree("model/tree.obj");
+	Object tree("model/Tree.obj");
 	Terrain ground;
 
 	//Shader
-	GLuint programID = LoadShaders("shader/t.glsl.vert", "shader/f.glsl.frag");
+	GLuint programID = LoadShaders("shader/v.glsl.vert", "shader/f.glsl.frag");
 	GLuint uniMVP = glGetUniformLocation(programID, "MVP");
 	GLuint uniM = glGetUniformLocation(programID, "M");
 	GLuint uniV = glGetUniformLocation(programID, "V");
@@ -158,10 +163,13 @@ int main() {
 
 		glm::mat4 model = glm::mat4(1.0);
 		glm::mat4 proj = glm::perspective(45.0f, ratio, 0.01f, 100.00f);
+		float theta = (mouseX * 2) * glm::pi<float>() / 1366.0f;
+		float phi = (mouseY) * 5.0f / 768.0f;
+
 		glm::mat4 view = glm::lookAt(
-							glm::vec3(0.0f, 2.0f, 10.0f),
-							glm::vec3(0.0f, 0.0f, 0.0f),
-							glm::vec3(0.0f, 1.0f, 0.0f));
+							glm::vec3(10.0f * glm::sin(-theta), phi, 10.0f * glm::cos(-theta)), // Eye
+							glm::vec3(0.0f, 0.0f, 0.0f),										// Look At
+							glm::vec3(0.0f, 1.0f, 0.0f));										// Up
 
 		glm::mat4 mvp = proj * view * model;
 	
@@ -180,10 +188,38 @@ int main() {
 		// Object 1 : Tree
 		tree.drawObject();
 
+		// second tree
+		model = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, .5f));
+		mvp = proj * view * model;
+		glUniformMatrix4fv(uniMVP, 1, GL_FALSE, &mvp[0][0]);
+		glUniformMatrix4fv(uniM, 1, GL_FALSE, &model[0][0]);
+
+		tree.drawObject();
+
+		// third tree
+		model = glm::translate(glm::mat4(1.0f), glm::vec3(1.4f, 0.0f, 1.0f));
+		mvp = proj * view * model;
+		glUniformMatrix4fv(uniMVP, 1, GL_FALSE, &mvp[0][0]);
+		glUniformMatrix4fv(uniM, 1, GL_FALSE, &model[0][0]);
+
+		tree.drawObject();
+
+
+		// 4'th tree
+		model = glm::translate(glm::mat4(1.0f), glm::vec3(-0.5f, 0.0f, 0.0f));
+		model = glm::shearY3D(model, -0.6f, 0.2f);
+		
+		mvp = proj * view * model;
+		glUniformMatrix4fv(uniMVP, 1, GL_FALSE, &mvp[0][0]);
+		glUniformMatrix4fv(uniM, 1, GL_FALSE, &model[0][0]);
+
+		tree.drawObject();
+		
+
 		// Ground
 		glm::mat4 t1 = glm::translate(glm::mat4(1.0f), glm::vec3(-4.0f, -4.0f, 0.0f));
 		glm::mat4 t2 = glm::rotate(glm::mat4(1.0f), glm::radians(85.f), glm::vec3(-1.0f,0.0f,0.0f));
-		model = t2 * (t1 * model);
+		model = t2 * (t1 * glm::mat4(1.0f));
 		mvp = proj * view * model;
 	
 		glUniformMatrix4fv(uniMVP, 1, GL_FALSE, &mvp[0][0]);

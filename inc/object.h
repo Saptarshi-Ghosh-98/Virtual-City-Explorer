@@ -6,7 +6,7 @@
 #include <vector>
 #include <array>
 
-extern GLuint VertexArrayID[2];
+extern GLuint VertexArrayID[];
 
 class Object {
 
@@ -22,7 +22,9 @@ class Object {
 
 	Object();
 	Object(const char *modelFileName);
-	~Object();
+	void load(const char *modelFileName);
+	void generateVBO();
 	void drawObject();
+	~Object();
 
 };

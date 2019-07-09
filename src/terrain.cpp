@@ -1,63 +1,118 @@
-#include "object.h"
+#include "drawableObject.h"
 #include "terrain.h"
 #include <ctime>
+#include <iostream>
+#include <GL/glew.h>
+#include "texture.h"
 
-Terrain::Terrain() {
+extern glm::mat4 proj, view;
+extern std::array<GLuint, 10> shaderID;
+
+Terrain::Terrain(const char * heightImageFile) {
 
 	srand(time(0));
+
+	imgWidth = 0;
+	imgHeight = 0;
+	unsigned char *HeightImage;
+	scaleMap = 0.1;
+	scaleHeight = 2;
+
+	std::vector<std::vector<float>> HeightMap;
+	std::vector<std::vector<glm::vec3>> NormalMap;
+
+
+	HeightImage = loadHeightMap(heightImageFile, imgWidth, imgHeight);
+	HeightMap.resize(imgWidth, std::vector<float>(imgHeight, 0));
+	NormalMap.resize(imgWidth, std::vector<glm::vec3>(imgHeight, glm::vec3(0.0f, 0.0f, 0.0f)));
+
+	// XY Plane Terrain (Orient to XZ Plane before Rendering)
+	if (HeightImage != nullptr) {
+		for (int j = 0; j < imgHeight; ++j) {
+			for (int i = 0; i < imgWidth; ++i) {
+				HeightMap[i][j] = scaleHeight * ((int)HeightImage[j*imgWidth + i] / 255.0f);
+			}
+		}
+	}
+
+	SOIL_free_image_data(HeightImage);
+
+	// Normals
+	for (int j = 0; j < imgHeight; ++j) {
+		for (int i = 0; i < imgWidth; ++i) {
+			if (i == 0 || j == 0 || i == imgWidth-1 || j == imgHeight-1) {
+				NormalMap[i][j] = (glm::vec3(0.0f, 0.0f, 1.0f));
+			} else {
+				NormalMap[i][j] = (glm::normalize(glm::vec3(
+					(HeightMap[i-1][j] - HeightMap[i+1][j]) / scaleHeight,
+					(HeightMap[i][j-1] - HeightMap[i][j+1]) / scaleHeight,
+					2.0f
+				)));
+			}
+		}
+	}
+
+	int uvWidth = (imgWidth-1);
+	int uvHeight = (imgHeight-1);
+	repeat = 10;
+
+	//Terrain Generation [UP : (0,0,1)]
+	for (int j = 0; j < imgHeight-1; ++j) {
+		for (int i = 0; i < imgWidth; ++i) {
+			vertex.push_back(glm::vec3(i, j, HeightMap[i][j]));
+			vertex.push_back(glm::vec3(i, j+1, HeightMap[i][j+1]));
+
+			normal.push_back(NormalMap[i][j]);
+			normal.push_back(NormalMap[i][j+1]);
+
+			uv.push_back(glm::vec2((float)(i*repeat)/(uvWidth), (float)(j*repeat)/(uvHeight))); //
+			uv.push_back(glm::vec2((float)(i*repeat)/(uvWidth), (float)((j+1)*repeat)/(uvHeight))); //
+		}
+		vertex.push_back(glm::vec3(imgWidth-1, j+1, HeightMap[imgWidth-1][j+1]));
+		vertex.push_back(glm::vec3(0, j+1, HeightMap[0][j+1]));
+
+		normal.push_back(NormalMap[imgWidth-1][j+1]);
+		normal.push_back(NormalMap[0][j+1]);
+
+		uv.push_back(glm::vec2(repeat, (float)((j+1)*repeat)/(uvHeight)));
+		uv.push_back(glm::vec2(0, (float)((j+1)*repeat)/(uvHeight)));			
+	}
+}
+
+void Terrain::load(const char * imageFile, GLuint shader_ID) {
+	Object::generateVBO();
+	Texture = loadImage(imageFile);
+
+	programID = shader_ID;
+
+	uni_MVP     = glGetUniformLocation(programID, "MVP");
+	uni_TextureSampler = glGetUniformLocation(programID, "myTextureSampler");
+
+	glm::mat4 t1 = glm::translate(glm::mat4(1.0f), glm::vec3(-imgWidth/2.0f, -imgHeight/2.0f, 0.0f));
+	glm::mat4 t2 = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	glm::mat4 t3 = glm::scale(glm::mat4(1.0f), glm::vec3(scaleMap, 1.0f, scaleMap));
+	model =  t3 * t2 * t1 * glm::mat4(1.0f);
+}
+
+void Terrain::drawObject(GLuint Tex) {
+	glUseProgram(programID);
 	
-	for (int i = 0; i < 10; ++i) {
-		for (int j = 0; j < 10; ++j) {
-			HeightMap[i][j] = 0;
-		}
-	}
-	glm::vec3 normalxy[9][9];
+	mvp = proj * view * model;
 
-	//Terrain Generation
-	for (int i = 1; i < 8; ++i) {
-		for (int j = 1; j < 8; ++j) {
-			
-			glm::vec3 v = glm::vec3(i, j, HeightMap[i][j]);
-			glm::vec3 v_n = glm::vec3(i, j+1, HeightMap[i][j+1]);
-			glm::vec3 v_e = glm::vec3(i+1, j, HeightMap[i+1][j]);
-			glm::vec3 v_s = glm::vec3(i, j-1, HeightMap[i][j-1]);
-			glm::vec3 v_w = glm::vec3(i-1, j, HeightMap[i-1][j]);
+	glUniformMatrix4fv(uni_MVP, 1, GL_FALSE, &mvp[0][0]);
 
-			vertex.insert(vertex.end(),  {v, v_e, v_n});
-			vertex.insert(vertex.end(),  {v, v_s, v_e});
-			vertex.insert(vertex.end(),  {v, v_n, v_w});
-			vertex.insert(vertex.end(),  {v, v_w, v_s});
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, Texture);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, Tex);
+	glUniform1i(uni_TextureSampler, 1);
+	glUniform1i(glGetUniformLocation(programID, "shadowTex"), 2);
 
-			glm::vec3 n[4];
-			n[0] = glm::cross(v_e - v, v_n - v);
-			n[1] = glm::cross(v_s - v, v_e - v);
-			n[2] = glm::cross(v_n - v, v_w - v);
-			n[3] = glm::cross(v_w - v, v_s - v);
-			glm::vec3 norm = glm::normalize(n[0] + n[1] + n[2] + n[3]);
-			normalxy[i][j] = norm;
-		}
-	}
+	glBindVertexArray(VertexArrayID[this->VAO_index_obj]);
 
-	for (int i = 1; i < 8; ++i) {
-		for (int j = 1; j < 8; ++j) {
-			normal.insert(normal.end(), {normalxy[i][j], normalxy[i+1][j], normalxy[i][j+1]});
-			normal.insert(normal.end(), {normalxy[i][j], normalxy[i][j-1], normalxy[i+1][j]});
-			normal.insert(normal.end(), {normalxy[i][j], normalxy[i][j+1], normalxy[i-1][j]});
-			normal.insert(normal.end(), {normalxy[i][j], normalxy[i-1][j], normalxy[i][j-1]});
-		}
-	}
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, this->vertex.size());
+}
 
-	glGenVertexArrays(1, &VertexArrayID[VAO_index_obj]);
-	glBindVertexArray(VertexArrayID[VAO_index_obj]);
-	glGenBuffers(1, &VBO[0]);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
-	glBufferData(GL_ARRAY_BUFFER, vertex.size() * sizeof(glm::vec3), &vertex[0], GL_STATIC_DRAW);
-
-	glGenBuffers(1, &VBO[1]);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-	glBufferData(GL_ARRAY_BUFFER, uv.size() * sizeof(glm::vec2), &uv[0], GL_STATIC_DRAW);
-
-	glGenBuffers(1, &VBO[2]);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
-	glBufferData(GL_ARRAY_BUFFER, normal.size() * sizeof(glm::vec3), &normal[0], GL_STATIC_DRAW);
+std::tuple<int,int,int,float> Terrain::getSize() {
+	return {imgWidth, imgHeight, 10, scaleMap};
 }

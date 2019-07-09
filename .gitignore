@@ -1,6 +1,7 @@
 # vscode
 .vscode/
 build/
+*.code-workspace
 
 # Prerequisites
 *.d
@@ -38,3 +39,14 @@ build/
 
 *.bak
 *.backup
+
+# Resources
+*.ttf
+*.psd
+*.png
+*.jpg
+*.jpeg
+*.dds
+*.obj
+*.rc
+*.ico
